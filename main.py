@@ -1,19 +1,35 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+import os
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    filters
+)
 
-BOT_TOKEN = "8107829492:AAHQm_DMEx-x9crS-E0ZnUbT2FgVz3GE2dA"
-ADMIN_ID = 5024732090  # replace with YOUR Telegram user ID
+BOT_TOKEN = os.environ.get("8107829492:AAHQm_DMEx-x9crS-E0ZnUbT2FgVz3GE2dA")
+ADMIN_ID = 5024732090  # <-- put YOUR Telegram user ID here
 
 approved_users = set()
 pending_text = None
 
 
+# /start → show button
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("📩 Get message", callback_data="GET_TEXT")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
-        "Bot active.\nApproved users can use /send."
+        "Welcome.\nPress the button below when instructed.",
+        reply_markup=reply_markup
     )
 
 
+# Admin approves users
 async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -27,6 +43,7 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"User {user_id} approved.")
 
 
+# Admin sends photo + text
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -43,23 +60,29 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for user_id in approved_users:
         await context.bot.send_photo(chat_id=user_id, photo=photo)
 
-    await update.message.reply_text("Photo sent.")
+    await update.message.reply_text("Photo sent to approved users.")
 
 
-async def send_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in approved_users:
-        await update.message.reply_text("Not approved.")
+# Button press handler
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    user_id = query.from_user.id
+
+    if user_id not in approved_users:
+        await query.message.reply_text("You are not approved.")
         return
 
     if not pending_text:
-        await update.message.reply_text("No message available.")
+        await query.message.reply_text("No message available.")
         return
 
-    await update.message.reply_text(pending_text)
+    await query.message.reply_text(pending_text)
 
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"Text sent to user {update.effective_user.id}"
+        text=f"Text sent to user {user_id}"
     )
 
 
@@ -68,8 +91,8 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("approve", approve))
-    app.add_handler(CommandHandler("send", send_text))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(CallbackQueryHandler(button_handler))
 
     app.run_polling()
 
