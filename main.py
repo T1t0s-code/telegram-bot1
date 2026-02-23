@@ -17,8 +17,8 @@ from telegram.ext import (
 )
 
 # --------- ENV CONFIG (Railway Variables) ----------
-BOT_TOKEN = os.environ.get("8107829492:AAHQm_DMEx-x9crS-E0ZnUbT2FgVz3GE2dA", "").strip()
-ADMIN_ID_RAW = os.environ.get("5024732090", "").strip()
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
+ADMIN_ID_RAW = os.environ.get("ADMIN_ID", "").strip()
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is missing. Set it in Railway Variables.")
