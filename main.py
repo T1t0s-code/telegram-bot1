@@ -10,13 +10,29 @@ from telegram.ext import (
 )
 
 BOT_TOKEN = os.environ.get("8107829492:AAHQm_DMEx-x9crS-E0ZnUbT2FgVz3GE2dA")
-ADMIN_ID = 5024732090  # <-- put YOUR Telegram user ID here
+ADMIN_ID = 5024732090  # <-- PUT YOUR TELEGRAM USER ID
 
-approved_users = set()
+USERS_FILE = "users.txt"
 pending_text = None
 
 
-# /start → show button
+# ---------- helpers ----------
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        return set()
+    with open(USERS_FILE, "r") as f:
+        return set(int(line.strip()) for line in f if line.strip())
+
+
+def save_user(user_id: int):
+    users = load_users()
+    users.add(user_id)
+    with open(USERS_FILE, "w") as f:
+        for uid in users:
+            f.write(f"{uid}\n")
+
+
+# ---------- commands ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("📩 Get message", callback_data="GET_TEXT")]
@@ -24,12 +40,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
-        "Welcome.\nPress the button below when instructed.",
+        "Bot ready.\nPress the button when instructed.",
         reply_markup=reply_markup
     )
 
 
-# Admin approves users
 async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -39,11 +54,23 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_id = int(context.args[0])
-    approved_users.add(user_id)
-    await update.message.reply_text(f"User {user_id} approved.")
+    save_user(user_id)
+    await update.message.reply_text(f"User {user_id} approved permanently.")
 
 
-# Admin sends photo + text
+async def list_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    users = load_users()
+    if not users:
+        await update.message.reply_text("No approved users.")
+        return
+
+    text = "Approved users:\n" + "\n".join(str(u) for u in users)
+    await update.message.reply_text(text)
+
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -57,20 +84,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pending_text = update.message.caption
     photo = update.message.photo[-1].file_id
 
-    for user_id in approved_users:
+    users = load_users()
+    for user_id in users:
         await context.bot.send_photo(chat_id=user_id, photo=photo)
 
-    await update.message.reply_text("Photo sent to approved users.")
+    await update.message.reply_text("Photo sent to all approved users.")
 
 
-# Button press handler
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     user_id = query.from_user.id
+    users = load_users()
 
-    if user_id not in approved_users:
+    if user_id not in users:
         await query.message.reply_text("You are not approved.")
         return
 
@@ -86,11 +114,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# ---------- main ----------
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("approve", approve))
+    app.add_handler(CommandHandler("list", list_users))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(button_handler))
 
